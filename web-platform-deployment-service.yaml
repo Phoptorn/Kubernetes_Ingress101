@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-platform
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nginx-web-platform
+  template:
+    metadata:
+      labels:
+        app: nginx-web-platform
+    spec:
+      containers:
+        - name: nginx-web-platform
+          image: nginx:1.22-alpine
+          volumeMounts:
+            - mountPath: /usr/share/nginx/html #nginx specific
+              name: static-html
+      volumes:
+        - name: static-html
+          hostPath:
+            path: /home/dev/api-core-main/proj/65sa-web-platform
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-platform
+spec:
+  selector:
+    app: nginx-web-platform
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
+      nodePort: 30002 ######
+  type: NodePort

@@ -1,0 +1,156 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-conf
+data:
+  nginx.conf: |
+    user  nginx;
+    worker_processes  auto;
+
+    error_log  /var/log/nginx/error.log notice;
+    pid        /var/run/nginx.pid;
+
+
+    events {
+        worker_connections  1024;
+    }
+
+
+    http {
+        # include       /etc/nginx/mime.types;
+        default_type  application/octet-stream;
+
+        log_format  main  '$remote_addr - $remote_user [$time_local] "$request" '
+                          '$status $body_bytes_sent "$http_referer" '
+                          '"$http_user_agent" "$http_x_forwarded_for"';
+
+        access_log  /var/log/nginx/access.log  main;
+
+        sendfile        on;
+        #tcp_nopush     on;
+
+        keepalive_timeout  65;
+
+        #gzip  on;
+
+
+        # include /etc/nginx/conf.d/*.conf;  # ส่วนที่สำคัญ
+        include /home/dev/api-core-main/build/nginx/conf.d/*.conf;  # ส่วนที่สำคัญ
+
+        # include /etc/nginx/sites-enabled/*.conf;  # ส่วนที่สำคัญ
+        include /home/dev/api-core-main/build/nginx/sites-enabled/*.conf;  # ส่วนที่สำคัญ
+    }
+
+  default.conf: |
+    server {
+        listen  443 ssl;
+        listen       80;
+        listen  [::]:80;
+
+        server_name  localhost;
+        if ($scheme = 'http') {
+                return 301 https://$host$request_uri;
+        }
+
+        ssl_protocols       TLSv1 TLSv1.1 TLSv1.2;
+        ssl_ciphers         AES128-SHA:AES256-SHA:RC4-SHA:DES-CBC3-SHA:RC4-MD5;
+        # ssl_ciphers         HIGH:!aNULL:!MD5;
+
+        ssl_certificate     certs/cert.pem;
+        ssl_certificate_key certs/key.pem;
+
+        #access_log  /var/log/nginx/host.access.log  main;
+
+
+        # 65SA-API
+        location /dev65/api/ {
+            proxy_pass  http://65sa-api-core:8000/;
+        }
+
+        # 65SA-Platform
+        location /dev65/platform/ {
+            proxy_pass  http://65sa-web-platform:80/;
+        }
+
+        # 65SA-Chat
+        location /dev65/chat/ {
+            proxy_pass  http://65sa-web-chat:80/;
+    }
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-platform
+  labels:
+    app: platform
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: platform
+  template:
+    metadata:
+      labels:
+        app: platform
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.22-alpine
+        ports:
+        - containerPort: 80
+        volumeMounts:
+        - mountPath: /etc/nginx/nginx.conf
+          # readOnly: true
+          subPath: nginx.conf
+          name: config
+        - mountPath: /etc/nginx/conf.d/default.conf
+          subPath: default.conf
+          readOnly: true
+          name: config
+        - mountPath: /usr/share/nginx/html
+          name: html
+      volumes:
+      - name: config
+        configMap:
+          name: nginx-conf
+          items:
+            - key: nginx.conf
+              path: nginx.conf
+            - key: default.conf
+              path: conf.d/default.conf
+      - name: html
+        hostPath:
+          path: /home/dev/api-core-main/proj/65sa-web-platform 
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: platform
+spec:
+  selector:
+    app: platform
+  ports:
+    - port: 80
+      targetPort: 80
+      # nodePort: 30012 ######
+  type: NodePort
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ingress-nginx-custom
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  rules:
+  - host: '*.web-platform.com'
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: platform
+            port:
+              number: 80

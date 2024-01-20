@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-chat
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nginx-web-chat
+  template:
+    metadata:
+      labels:
+        app: nginx-web-chat
+    spec:
+      containers:
+        - name: nginx-web-chat
+          image: nginx:1.22-alpine
+          volumeMounts:
+            - mountPath: /usr/share/nginx/html #nginx specific
+              name: static-html
+      volumes:
+        - name: static-html
+          hostPath:
+            path: /home/dev/api-core-main/proj/65sa-web-chat
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-chat
+spec:
+  selector:
+    app: nginx-web-chat
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
+      nodePort: 30003 ######
+  type: NodePort

@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-platform
+  labels:
+    app: platform
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: platform
+  template:
+    metadata:
+      labels:
+        app: platform
+    spec:
+      containers:
+      - name: nginx
+        # image: nginx:1.22-alpine
+        image: nginx
+        ports:
+        - containerPort: 80
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: platform
+spec:
+  selector:
+    app: platform
+  ports:
+      - port: 80
+        targetPort: 80
+  #       nodePort: 30012 ######
+  # type: NodePort
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ingress-nginx-custom
+  annotations:
+    # kubernetes.io/ingress.class: nginx
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: "web-platform.com"
+    http:
+      paths:
+      - path: "/"
+        pathType: Prefix
+        backend:
+          service:
+            name: platform
+            port:
+              number: 80
+
+# https://platform9.com/learn/v1.0/tutorials/nodeport-ingress

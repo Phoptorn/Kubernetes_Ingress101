@@ -1,0 +1,97 @@
+# nginx-deployment
+# nginx.conf
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-conf
+data:
+  nginx.conf: |
+    user  nginx;
+    worker_processes  auto;
+
+    error_log  /var/log/nginx/error.log notice;
+    pid        /var/run/nginx.pid;
+
+
+    events {
+        worker_connections  1024;
+    }
+
+
+    http {
+        include       /etc/nginx/mime.types;
+        default_type  application/octet-stream;
+
+        log_format  main  '$remote_addr - $remote_user [$time_local] "$request" '
+                          '$status $body_bytes_sent "$http_referer" '
+                          '"$http_user_agent" "$http_x_forwarded_for"';
+
+        access_log  /var/log/nginx/access.log  main;
+
+        sendfile        on;
+        #tcp_nopush     on;
+
+        keepalive_timeout  65;
+
+        #gzip  on;
+
+        include /etc/nginx/conf.d/*.conf;  # ส่วนที่สำคัญ
+
+        include /etc/nginx/sites-enabled/*.conf;  # ส่วนที่สำคัญ
+    }
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx
+  labels:
+    app: nginx
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      containers:
+        - name: nginx
+          # image: nginx:1.23.3
+          image: nginx:1.22-alpine
+          ports:
+            - containerPort: 80
+          volumeMounts:
+            - name: nginx-conf
+              mountPath: /etc/nginx
+              readOnly: true
+            - name: log
+              mountPath: /var/log/nginx
+      volumes:
+      - name: nginx-conf
+        configMap:
+          name: nginx-conf # place ConfigMap `nginx-conf` on /etc/nginx
+          items:
+            - key: nginx.conf
+              path: nginx.conf
+            - key: virtualhost.conf
+              path: virtualhost/virtualhost.conf # dig directory
+      - name: log
+        emptyDir: {}
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx
+spec:
+  type: NodePort
+  ports:
+  - port: 80
+    targetPort: 80
+  selector:
+    app: nginx
+
+# https://gist.github.com/petitviolet/d36f33d145d0bbf4b54eb187b79d0244
